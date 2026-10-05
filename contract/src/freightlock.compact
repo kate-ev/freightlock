@@ -1,0 +1,320 @@
+// SPDX-License-Identifier: Apache-2.0
+// Freightlock: Confidential Cross-Border Trade & Milestone Escrow on Midnight.
+// Quality threshold proofs, customs attestations, and confidential cargo settlements.
+
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+export enum ShipmentStatus { initiated, confirmed, customs_cleared, settled, disputed, refunded }
+
+export struct CargoTerms {
+  escrowValue: Uint<64>;
+  minQualityScore: Uint<16>;    // e.g. 8500 = 85.00%
+  departureTimestamp: Uint<32>;
+  arrivalDeadline: Uint<32>;
+  cargoType: Uint<16>;
+}
+
+export struct InspectionReport {
+  measuredQuality: Uint<16>;
+  temperatureCompliant: Boolean;
+  customsSealValid: Boolean;
+  inspectionTimestamp: Uint<32>;
+}
+
+export struct ShipmentRecord {
+  importer: Bytes<32>;
+  exporter: Bytes<32>;
+  inspector: Bytes<32>;
+  termsCommitment: Bytes<32>;
+  status: ShipmentStatus;
+  createdAt: Uint<32>;
+  arrivalDeadline: Uint<32>;
+  minQualityScore: Uint<16>;
+}
+
+struct CargoCommitmentInput {
+  domain: Bytes<32>;
+  terms: CargoTerms;
+  importer: Bytes<32>;
+  salt: Bytes<32>;
+}
+
+struct ReportCommitmentInput {
+  domain: Bytes<32>;
+  report: InspectionReport;
+  inspector: Bytes<32>;
+  salt: Bytes<32>;
+}
+
+// ---------------------------------------------------------------------------
+// Ledger State
+// ---------------------------------------------------------------------------
+
+export sealed ledger admin: Bytes<32>;
+export ledger certifiedInspectors: Set<Bytes<32>>;
+export ledger shipments: Map<Bytes<32>, ShipmentRecord>;
+export ledger shipmentCount: Counter;
+export ledger inspectionReportRegistry: Map<Bytes<32>, Bytes<32>>;
+export ledger settlementNullifiers: Map<Bytes<32>, Boolean>;
+export ledger customsProofHashes: Map<Bytes<32>, Bytes<32>>;
+
+// ---------------------------------------------------------------------------
+// Witnesses (Private Inputs)
+// ---------------------------------------------------------------------------
+
+witness privateKey(): Bytes<32>;
+witness cargoTerms(): CargoTerms;
+witness cargoSalt(): Bytes<32>;
+witness inspectionReport(): InspectionReport;
+witness reportSalt(): Bytes<32>;
+
+// ---------------------------------------------------------------------------
+// Pure Circuits
+// ---------------------------------------------------------------------------
+
+export pure circuit importerKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "freightlock:importer:v1"), sk]);
+}
+
+export pure circuit exporterKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "freightlock:exporter:v1"), sk]);
+}
+
+export pure circuit inspectorKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "freightlock:inspector:v1"), sk]);
+}
+
+export pure circuit cargoCommitment(terms: CargoTerms, importer: Bytes<32>, salt: Bytes<32>): Bytes<32> {
+  return persistentHash<CargoCommitmentInput>(CargoCommitmentInput {
+    domain: pad(32, "freightlock:cargo:v1"),
+    terms: terms,
+    importer: importer,
+    salt: salt
+  });
+}
+
+export pure circuit reportCommitment(report: InspectionReport, inspector: Bytes<32>, salt: Bytes<32>): Bytes<32> {
+  return persistentHash<ReportCommitmentInput>(ReportCommitmentInput {
+    domain: pad(32, "freightlock:report:v1"),
+    report: report,
+    inspector: inspector,
+    salt: salt
+  });
+}
+
+export pure circuit settlementNullifier(salt: Bytes<32>, shipmentId: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "freightlock:nullifier:v1"), shipmentId, salt]);
+}
+
+export pure circuit releaseToken(commitment: Bytes<32>, recipient: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "freightlock:release:v1"), commitment, recipient]);
+}
+
+export pure circuit meetsQualityStandard(report: InspectionReport, minScore: Uint<16>): Boolean {
+  return report.measuredQuality >= minScore &&
+         report.temperatureCompliant &&
+         report.customsSealValid;
+}
+
+// ---------------------------------------------------------------------------
+// State Transition Circuits
+// ---------------------------------------------------------------------------
+
+constructor() {
+  admin = disclose(inspectorKey(privateKey()));
+}
+
+export circuit registerInspector(inspectorPublic: Bytes<32>): [] {
+  const pKey = privateKey();
+  assert(disclose(inspectorKey(pKey) == admin), "Only admin can register certified inspectors");
+  certifiedInspectors.insert(disclose(inspectorPublic));
+}
+
+export circuit initiateShipment(
+  shipmentId: Bytes<32>,
+  importerPublic: Bytes<32>,
+  exporterPublic: Bytes<32>,
+  inspectorPublic: Bytes<32>,
+  timestamp: Uint<32>
+): [] {
+  const id = disclose(shipmentId);
+  assert(!shipments.member(id), "Shipment already registered");
+
+  const pKey = privateKey();
+  assert(disclose(importerKey(pKey) == importerPublic), "Invalid importer key");
+
+  const inspPub = disclose(inspectorPublic);
+  assert(certifiedInspectors.member(inspPub), "Designated inspector not certified");
+
+  const terms = cargoTerms();
+  const salt = cargoSalt();
+
+  assert(disclose(terms.escrowValue > 0), "Escrow value must be positive");
+  assert(disclose(terms.arrivalDeadline > timestamp), "Arrival deadline must be in future");
+
+  const commitment = disclose(cargoCommitment(terms, importerPublic, salt));
+
+  const record = ShipmentRecord {
+    importer: disclose(importerPublic),
+    exporter: disclose(exporterPublic),
+    inspector: inspPub,
+    termsCommitment: commitment,
+    status: ShipmentStatus.initiated,
+    createdAt: disclose(timestamp),
+    arrivalDeadline: disclose(terms.arrivalDeadline),
+    minQualityScore: disclose(terms.minQualityScore)
+  };
+
+  shipments.insert(id, record);
+  shipmentCount.increment(1);
+}
+
+export circuit confirmDeparture(shipmentId: Bytes<32>): [] {
+  const id = disclose(shipmentId);
+  assert(shipments.member(id), "Shipment not found");
+  const record = shipments.lookup(id);
+  assert(record.status == ShipmentStatus.initiated, "Shipment not in initiated status");
+
+  const pKey = privateKey();
+  assert(disclose(exporterKey(pKey) == record.exporter), "Only exporter can confirm departure");
+
+  const updated = ShipmentRecord {
+    importer: record.importer,
+    exporter: record.exporter,
+    inspector: record.inspector,
+    termsCommitment: record.termsCommitment,
+    status: ShipmentStatus.confirmed,
+    createdAt: record.createdAt,
+    arrivalDeadline: record.arrivalDeadline,
+    minQualityScore: record.minQualityScore
+  };
+
+  shipments.insert(id, updated);
+}
+
+export circuit attestInspection(shipmentId: Bytes<32>, reportCommit: Bytes<32>): [] {
+  const id = disclose(shipmentId);
+  assert(shipments.member(id), "Shipment not found");
+  const record = shipments.lookup(id);
+  assert(record.status == ShipmentStatus.confirmed, "Shipment not in transit");
+
+  const pKey = privateKey();
+  const caller = disclose(inspectorKey(pKey));
+  assert(caller == record.inspector, "Only designated inspector can attest report");
+
+  inspectionReportRegistry.insert(id, disclose(reportCommit));
+}
+
+export circuit submitCustomsClearance(shipmentId: Bytes<32>, clearanceHash: Bytes<32>): [] {
+  const id = disclose(shipmentId);
+  assert(shipments.member(id), "Shipment not found");
+  const record = shipments.lookup(id);
+  assert(record.status == ShipmentStatus.confirmed, "Shipment not in transit");
+
+  const pKey = privateKey();
+  assert(disclose(inspectorKey(pKey) == record.inspector), "Only designated inspector can clear customs");
+
+  assert(inspectionReportRegistry.member(id), "No attested inspection report found");
+
+  const report = inspectionReport();
+  const rSalt = reportSalt();
+  const expectedCommit = reportCommitment(report, record.inspector, rSalt);
+  assert(disclose(expectedCommit == inspectionReportRegistry.lookup(id)),
+         "Inspection report commitment mismatch");
+
+  assert(disclose(meetsQualityStandard(report, record.minQualityScore)),
+         "Cargo failed inspection standard or seal verification");
+
+  const updated = ShipmentRecord {
+    importer: record.importer,
+    exporter: record.exporter,
+    inspector: record.inspector,
+    termsCommitment: record.termsCommitment,
+    status: ShipmentStatus.customs_cleared,
+    createdAt: record.createdAt,
+    arrivalDeadline: record.arrivalDeadline,
+    minQualityScore: record.minQualityScore
+  };
+
+  shipments.insert(id, updated);
+  customsProofHashes.insert(id, disclose(clearanceHash));
+}
+
+export circuit settleFreightPayment(shipmentId: Bytes<32>): Bytes<32> {
+  const id = disclose(shipmentId);
+  assert(shipments.member(id), "Shipment not found");
+  const record = shipments.lookup(id);
+  assert(record.status == ShipmentStatus.customs_cleared, "Cargo not cleared for settlement");
+
+  const terms = cargoTerms();
+  const salt = cargoSalt();
+  const computed = cargoCommitment(terms, record.importer, salt);
+  assert(disclose(computed == record.termsCommitment), "Terms commitment mismatch");
+
+  const pKey = privateKey();
+  const iKey = importerKey(pKey);
+  const inspKey = inspectorKey(pKey);
+  assert(disclose(iKey == record.importer || inspKey == record.inspector),
+         "Not authorized to settle payment");
+
+  const nullifier = disclose(settlementNullifier(salt, id));
+  assert(!settlementNullifiers.member(nullifier), "Shipment already settled");
+
+  const token = disclose(releaseToken(record.termsCommitment, record.exporter));
+
+  const updated = ShipmentRecord {
+    importer: record.importer,
+    exporter: record.exporter,
+    inspector: record.inspector,
+    termsCommitment: record.termsCommitment,
+    status: ShipmentStatus.settled,
+    createdAt: record.createdAt,
+    arrivalDeadline: record.arrivalDeadline,
+    minQualityScore: record.minQualityScore
+  };
+
+  shipments.insert(id, updated);
+  settlementNullifiers.insert(nullifier, true);
+  return token;
+}
+
+export circuit refundExpiredShipment(shipmentId: Bytes<32>, currentTimestamp: Uint<32>): Bytes<32> {
+  const id = disclose(shipmentId);
+  assert(shipments.member(id), "Shipment not found");
+  const record = shipments.lookup(id);
+  assert(record.status == ShipmentStatus.initiated || record.status == ShipmentStatus.confirmed,
+         "Shipment cannot be refunded in current status");
+
+  const now = disclose(currentTimestamp);
+  assert(now > record.arrivalDeadline, "Arrival deadline has not yet expired");
+
+  const terms = cargoTerms();
+  const salt = cargoSalt();
+  const computed = cargoCommitment(terms, record.importer, salt);
+  assert(disclose(computed == record.termsCommitment), "Terms commitment mismatch");
+
+  const pKey = privateKey();
+  assert(disclose(importerKey(pKey) == record.importer), "Only importer can claim refund");
+
+  const nullifier = disclose(settlementNullifier(salt, id));
+  assert(!settlementNullifiers.member(nullifier), "Shipment already settled or refunded");
+
+  const refundToken = disclose(releaseToken(record.termsCommitment, record.importer));
+
+  const updated = ShipmentRecord {
+    importer: record.importer,
+    exporter: record.exporter,
+    inspector: record.inspector,
+    termsCommitment: record.termsCommitment,
+    status: ShipmentStatus.refunded,
+    createdAt: record.createdAt,
+    arrivalDeadline: record.arrivalDeadline,
+    minQualityScore: record.minQualityScore
+  };
+
+  shipments.insert(id, updated);
+  settlementNullifiers.insert(nullifier, true);
+  return refundToken;
+}

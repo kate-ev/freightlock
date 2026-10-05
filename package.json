@@ -1,0 +1,28 @@
+{
+    "name": "freightlock",
+    "version": "1.0.0",
+    "description": "Milestone escrow for ocean freight: terms, inspection grades and cargo value stay sealed while customs and settlement are proven on Midnight.",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "scripts": {
+        "build": "vite build web",
+        "build:web": "vite build web",
+        "demo": "tsx scripts/demo.ts",
+        "dev": "vite web",
+        "test": "vitest run tests",
+        "typecheck": "tsc -p tsconfig.json --noEmit && tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom,dom.iterable web/src/main.ts"
+    },
+    "dependencies": {
+        "@midnight-ntwrk/compact-runtime": "0.20.0"
+    },
+    "devDependencies": {
+        "tsx": ">=4.19.0 <5",
+        "typescript": ">=5.4.0 <6",
+        "vite": ">=5.4.0 <6",
+        "vite-plugin-wasm": ">=3.3.0 <4",
+        "vitest": ">=1.5.0 <2"
+    }
+}
