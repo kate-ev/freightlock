@@ -1,0 +1,154 @@
+/* Freightlock manifest sheet: harbour navy, container orange, stencil labels. */
+
+:root {
+  --navy-900: #07121f;
+  --navy-800: #0b1b2d;
+  --navy-700: #12263d;
+  --navy-500: #2a4562;
+  --paper: #e9e4d6;
+  --paper-ink: #1d2a38;
+  --rule: #b9b29f;
+  --orange: #f97316;
+  --orange-dim: #a8501a;
+  --steel: #9fb0c3;
+  --font-head: 'Space Grotesk', system-ui, sans-serif;
+  --font-num: 'Space Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--navy-900); }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--paper);
+  font: 15px/1.5 var(--font-head);
+  /* corrugated container wall: vertical ribs with a soft overhead light */
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(249, 115, 22, 0.08), transparent 60%),
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.025) 0 6px,
+      rgba(0, 0, 0, 0.18) 6px 9px,
+      rgba(255, 255, 255, 0.015) 9px 18px),
+    linear-gradient(180deg, var(--navy-800), var(--navy-900));
+}
+
+.mono { font-family: var(--font-num); }
+
+.hull { max-width: 1080px; margin: 0 auto; padding: 28px 22px 40px; }
+
+/* ---- masthead ---- */
+.masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; border-bottom: 2px solid var(--orange); padding-bottom: 16px; }
+.masthead__mark { display: flex; gap: 14px; align-items: center; }
+.masthead h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
+.masthead p { margin: 0; color: var(--steel); font-size: 13px; }
+.stencil {
+  display: grid; place-items: center; width: 52px; height: 52px;
+  border: 3px solid var(--orange); color: var(--orange);
+  font: 700 22px var(--font-num); letter-spacing: 0.08em;
+}
+.masthead__meta { display: flex; gap: 22px; align-items: center; margin: 0; }
+.masthead__meta dt, .stencil-label {
+  font: 700 10px var(--font-num); letter-spacing: 0.22em; text-transform: uppercase; color: var(--orange);
+}
+.masthead__meta dd { margin: 0; font-size: 14px; }
+
+.toggle, .lever {
+  font: 600 13px var(--font-head); cursor: pointer; color: var(--paper);
+  background: var(--navy-700); border: 1px solid var(--navy-500);
+  padding: 9px 16px; transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.toggle:hover, .lever:hover { border-color: var(--orange); }
+.toggle:active, .lever:active { transform: translate3d(0, 1px, 0); }
+.lever:disabled { opacity: 0.5; cursor: progress; }
+.lever--live { background: var(--orange); color: #1a0d03; border-color: var(--orange); font-weight: 700; }
+.lever--live:hover { background: #fb8a3c; }
+
+/* ---- voyage timeline ---- */
+.voyage { margin: 26px 0; padding: 18px 20px 14px; background: var(--navy-800); border: 1px solid var(--navy-500); }
+.voyage__sea { position: relative; height: 44px; overflow: hidden; border-bottom: 2px dashed var(--navy-500); contain: layout paint; }
+.voyage__swell {
+  position: absolute; inset: auto -40px 0 -40px; height: 8px;
+  background: repeating-linear-gradient(90deg, rgba(159, 176, 195, 0.25) 0 14px, transparent 14px 28px);
+  animation: swell 3.2s linear infinite; will-change: transform; contain: layout paint;
+}
+.voyage__sea:hover .voyage__swell { animation-play-state: paused; }
+@keyframes swell { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-28px, 0, 0); } }
+.voyage__vessel {
+  --leg: 0;
+  position: absolute; left: 0; bottom: 4px; width: calc(100% - 64px);
+  transform: translate3d(calc(var(--leg) * 100%), 0, 0);
+  transition: transform 1.1s cubic-bezier(0.65, 0, 0.35, 1);
+  will-change: transform; contain: layout paint;
+}
+.voyage__vessel svg { display: block; animation: bob 2.4s ease-in-out infinite; }
+.voyage__sea:hover .voyage__vessel svg { animation-play-state: paused; }
+@keyframes bob { 50% { transform: translate3d(0, -2px, 0); } }
+.voyage__stops { list-style: none; margin: 10px 0 0; padding: 0; display: flex; justify-content: space-between; }
+.voyage__stops li { display: flex; flex-direction: column; font-size: 12px; color: var(--steel); min-width: 0; }
+.voyage__stops li:last-child { text-align: right; }
+.voyage__stops li:nth-child(n+2):not(:last-child) { text-align: center; }
+.voyage__stops b { font: 700 11px var(--font-num); letter-spacing: 0.1em; color: var(--navy-500); }
+.voyage__stops li.is-past b { color: var(--orange-dim); }
+.voyage__stops li.is-here b, .voyage__stops li.is-here span { color: var(--orange); }
+
+/* ---- bill of lading sheet ---- */
+.lading {
+  background: var(--paper); color: var(--paper-ink); padding: 26px 28px;
+  box-shadow: 0 1px 0 #fff4 inset, 0 24px 50px -20px rgba(0, 0, 0, 0.7);
+  background-image: linear-gradient(transparent 31px, rgba(29, 42, 56, 0.06) 32px);
+  background-size: 100% 32px;
+}
+.lading__head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; border-bottom: 3px double var(--paper-ink); padding-bottom: 8px; }
+.lading h2 { margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em; }
+.lading h2 small { font: 400 11px var(--font-num); letter-spacing: 0.12em; color: #6b6656; margin-left: 8px; }
+.lading__ref { font-size: 12px; color: #6b6656; }
+
+.ledger-rows { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+.ledger-rows th { text-align: left; font: 700 10px var(--font-num); letter-spacing: 0.2em; text-transform: uppercase; color: #6b6656; padding: 6px 8px; border-bottom: 1px solid var(--paper-ink); }
+.ledger-rows td { padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.ledger-rows input { width: 100%; max-width: 220px; background: transparent; border: 0; border-bottom: 1px dashed var(--paper-ink); color: var(--paper-ink); font-size: 15px; padding: 2px 0; }
+.ledger-rows input:focus { outline: none; border-bottom-color: var(--orange); }
+.digest { font-size: 12px; word-break: break-all; }
+.tag { font: 700 10px var(--font-num); letter-spacing: 0.18em; text-transform: uppercase; color: #6b6656; }
+.tag--sealed { color: var(--orange-dim); }
+.fineprint { font-size: 12px; color: #6b6656; margin: 10px 0 0; }
+
+.attest { display: grid; grid-template-columns: 220px 1fr; gap: 24px; margin-top: 22px; align-items: center; }
+.attest__box { position: relative; height: 130px; border: 1px dashed var(--paper-ink); display: grid; place-items: center; }
+.attest__empty { margin: 0; font-size: 11px; color: #8a8471; text-align: center; padding: 0 16px; }
+.attest__stamp {
+  position: absolute; display: flex; flex-direction: column; align-items: center;
+  padding: 8px 14px; border: 3px solid #b23a12; color: #b23a12; border-radius: 4px;
+  font: 700 13px var(--font-num); letter-spacing: 0.18em; text-transform: uppercase;
+  opacity: 0; transform: translate3d(0, 0, 0) rotate(-9deg) scale(1.6);
+  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.attest__stamp em { font-style: normal; font-size: 11px; letter-spacing: 0.1em; }
+.attest__box.is-stamped .attest__stamp { opacity: 0.88; transform: translate3d(0, 0, 0) rotate(-9deg) scale(1); }
+.attest__box.is-stamped .attest__empty { visibility: hidden; }
+.attest__notes h3 { margin: 0 0 4px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; }
+.attest__notes p { margin: 0; font-size: 13px; color: #4a4a44; }
+
+/* ---- control strip ---- */
+.helm { margin-top: 26px; background: var(--navy-900); border-top: 4px solid var(--orange); padding: 18px 20px; display: grid; gap: 14px; }
+.helm__buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+.helm__status { display: flex; gap: 14px; align-items: baseline; }
+.helm__status output { font-size: 13px; }
+.helm__log {
+  margin: 0; height: 280px; overflow: auto; padding: 14px;
+  background: #050d17; border: 1px solid var(--navy-700);
+  font-size: 12px; line-height: 1.55; color: #c9d6e3; white-space: pre-wrap;
+}
+
+.colophon { margin-top: 18px; font-size: 11px; color: var(--navy-500); letter-spacing: 0.1em; }
+
+@media (max-width: 680px) {
+  .attest { grid-template-columns: 1fr; }
+  .voyage__stops span { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

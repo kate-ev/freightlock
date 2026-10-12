@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freightlock / Bill of Lading</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./src/style.css">
+<script>
+  // Verification hook: capture any uncaught failure before the app loads.
+  (function () {
+    var root = document.documentElement;
+    function note(msg) { root.dataset.error = (root.dataset.error ? root.dataset.error + ' | ' : '') + msg; }
+    window.addEventListener('error', function (e) { note(String(e.message || e.error)); });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason; note(r && r.message ? r.message : String(r));
+    });
+  })();
+</script>
+</head>
+<body>
+<div class="hull">
+
+  <header class="masthead">
+    <div class="masthead__mark">
+      <span class="stencil">FL</span>
+      <div>
+        <h1>Freightlock</h1>
+        <p>Sealed milestone escrow for ocean freight on Midnight</p>
+      </div>
+    </div>
+    <dl class="masthead__meta">
+      <div><dt>Voyage</dt><dd class="mono" id="voyageNo">FL-0000</dd></div>
+      <div><dt>UTC</dt><dd class="mono" id="clock">--:--:--</dd></div>
+      <button type="button" class="toggle" id="horn" aria-pressed="true">Horn on</button>
+    </dl>
+  </header>
+
+  <section class="voyage" aria-label="Voyage progress">
+    <div class="voyage__sea">
+      <div class="voyage__swell"></div>
+      <div class="voyage__vessel" id="vessel" aria-hidden="true">
+        <svg viewBox="0 0 64 28" width="64" height="28"><path d="M2 18h60l-8 9H10z" fill="#f97316"/><rect x="14" y="8" width="10" height="9" fill="#e7ecf3"/><rect x="25" y="8" width="10" height="9" fill="#2f6f8f"/><rect x="36" y="8" width="10" height="9" fill="#e7ecf3"/><rect x="48" y="2" width="6" height="15" fill="#cfd8e3"/></svg>
+      </div>
+    </div>
+    <ol class="voyage__stops" id="stops">
+      <li data-leg="origin"><b>01</b><span>Origin port</span></li>
+      <li data-leg="departure"><b>02</b><span>Departure</span></li>
+      <li data-leg="inspection"><b>03</b><span>Inspection</span></li>
+      <li data-leg="customs"><b>04</b><span>Customs</span></li>
+      <li data-leg="settlement"><b>05</b><span>Settlement</span></li>
+    </ol>
+  </section>
+
+  <main class="lading">
+    <div class="lading__head">
+      <h2>Bill of Lading <small>non-negotiable / sealed terms</small></h2>
+      <span class="mono lading__ref" id="consignment">consignment pending</span>
+    </div>
+
+    <table class="ledger-rows">
+      <thead><tr><th>Field</th><th>Entry</th><th>Disclosure</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Declared cargo value (USD)</td>
+          <td><input id="declared" class="mono" type="number" min="1000" step="1000" value="250000"></td>
+          <td class="tag tag--sealed">Sealed</td>
+        </tr>
+        <tr>
+          <td>Minimum grade (bps)</td>
+          <td><input id="floor" class="mono" type="number" min="0" max="10000" step="50" value="8500"></td>
+          <td class="tag tag--sealed">Sealed</td>
+        </tr>
+        <tr>
+          <td>Terms commitment (preview)</td>
+          <td class="mono digest" id="termsSeal">-</td>
+          <td class="tag">Public</td>
+        </tr>
+        <tr>
+          <td>Clearance digest (preview)</td>
+          <td class="mono digest" id="clearSeal">-</td>
+          <td class="tag">Public</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="fineprint">Digests above are SHA-256 previews for the page only. The real commitments are produced by the compiled contract when the voyage is run below.</p>
+
+    <div class="attest">
+      <div class="attest__box" id="stampBox">
+        <div class="attest__stamp" id="stamp">
+          <span>Inspected</span>
+          <em class="mono" id="stampDate">--</em>
+          <span>Grade withheld</span>
+        </div>
+        <p class="attest__empty">Inspector attestation appears here</p>
+      </div>
+      <div class="attest__notes">
+        <h3>Inspector attestation</h3>
+        <p>The inspector commits to a report hash. The contract proves the measured grade clears the floor, seals are intact and the reefer stayed in range, without publishing the grade itself.</p>
+      </div>
+    </div>
+  </main>
+
+  <section class="helm" aria-label="Control strip">
+    <div class="helm__buttons">
+      <button type="button" class="lever" id="advance">Advance leg</button>
+      <button type="button" class="lever" id="reset">Reset voyage</button>
+      <button type="button" class="lever lever--live" id="sail">Run contract voyage</button>
+    </div>
+    <div class="helm__status">
+      <span class="stencil-label">Status</span>
+      <output id="runState" class="mono">Idle - contract not yet executed</output>
+    </div>
+    <pre class="helm__log mono" id="runLog" aria-live="polite">Circuit output streams here.</pre>
+  </section>
+
+  <footer class="colophon mono">Freightlock / Midnight Compact contract / circuits execute locally in this tab</footer>
+</div>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>
